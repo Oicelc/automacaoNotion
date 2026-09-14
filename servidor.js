@@ -39,10 +39,10 @@ app.get('/hud-livros', async (req, res) => {
             totalPaginas += livro.properties["Página total"]?.number || 0; 
         }
 
-        const metaAnual = 20;
+        const metaAnual = 10;
         const porcentagem = Math.min(Math.floor((quantidadeLidos / metaAnual) * 100), 100);
 
-        // 2. Monta o HTML e o CSS do seu HUD (Aqui você brinca com o Design!)
+        // 2. Monta o HTML e o CSS do seu HUD ajustado
         const html = `
         <!DOCTYPE html>
         <html lang="pt-BR">
@@ -50,29 +50,68 @@ app.get('/hud-livros', async (req, res) => {
             <meta charset="UTF-8">
             <style>
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+                
+                * {
+                    box-sizing: border-box; /* Garante que o padding não quebre a largura */
+                }
+                
                 body {
                     margin: 0;
-                    padding: 20px;
-                    background-color: #191919; /* Fundo escuro do Notion */
+                    padding: 8px; /* Padding menor para aproveitar melhor o iframe */
+                    background-color: #191919;
                     color: #E0E0E0;
                     font-family: 'Inter', sans-serif;
                     display: flex;
-                    justify-content: space-around;
-                    align-items: center;
+                    justify-content: space-between; /* Distribui o espaço uniformemente */
+                    align-items: stretch; /* Força todos os cartões a terem a mesma altura */
+                    height: 100vh; /* Ocupa 100% da altura do iframe */
+                    overflow: hidden; /* Corta qualquer barra de rolagem indesejada */
                 }
+                
                 .card {
                     background: #252525;
-                    border-left: 4px solid #9b51e0; /* Roxo neon */
-                    padding: 15px 25px;
+                    border-left: 4px solid #9b51e0;
+                    padding: 15px;
                     border-radius: 8px;
                     box-shadow: 0 4px 6px rgba(0,0,0,0.3);
                     text-align: center;
-                    width: 30%;
+                    width: 32%; /* Deixa 4% de margem total para respirar */
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: center; /* Centraliza o texto verticalmente */
+                    align-items: center;
                 }
-                .title { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #888; margin-bottom: 8px; }
-                .value { font-size: 32px; font-weight: bold; color: #fff; margin: 0; }
-                .progress-bg { background: #333; border-radius: 10px; height: 10px; width: 100%; margin-top: 15px; overflow: hidden; }
-                .progress-bar { background: #9b51e0; height: 100%; width: ${porcentagem}%; transition: width 1s ease-in-out; }
+                
+                .title { 
+                    font-size: 11px; 
+                    text-transform: uppercase; 
+                    letter-spacing: 1px; 
+                    color: #888; 
+                    margin: 0 0 8px 0; 
+                }
+                
+                .value { 
+                    font-size: 32px; 
+                    font-weight: bold; 
+                    color: #fff; 
+                    margin: 0; 
+                }
+                
+                .progress-bg { 
+                    background: #333; 
+                    border-radius: 10px; 
+                    height: 8px; 
+                    width: 100%; 
+                    margin-top: 15px; 
+                    overflow: hidden; 
+                }
+                
+                .progress-bar { 
+                    background: #9b51e0; 
+                    height: 100%; 
+                    width: ${porcentagem}%; 
+                    transition: width 1s ease-in-out; 
+                }
             </style>
         </head>
         <body>
