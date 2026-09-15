@@ -219,9 +219,28 @@ app.get('/hud-livros/graficos', async (req, res) => {
                 select, button { background: #333; color: #fff; border: 1px solid #444; border-radius: 4px; padding: 6px 10px; font-size: 12px; cursor: pointer; outline: none; }
                 button.active { background: #9b51e0; border-color: #9b51e0; }
                 .canvas-container { flex-grow: 1; position: relative; min-height: 0; }
-                .heatmap-container { display: flex; gap: 4px; justify-content: center; align-items: flex-end; flex-grow: 1; overflow-x: auto; padding-bottom: 10px;}
-                .heatmap-col { display: flex; flex-direction: column; gap: 4px; }
-                .heat-square { width: 12px; height: 12px; background: #333; border-radius: 2px; transition: transform 0.1s; cursor: pointer;}
+                .heatmap-container { 
+                    display: flex; 
+                    gap: 6px; 
+                    justify-content: center; 
+                    align-items: center; 
+                    flex-grow: 1; 
+                    overflow-x: auto; 
+                    padding: 20px;
+                }
+                .heatmap-col { 
+                    display: flex; 
+                    flex-direction: column; 
+                    gap: 6px; 
+                }
+                .heat-square { 
+                    width: 20px; 
+                    height: 20px; 
+                    background: #333; 
+                    border-radius: 4px; 
+                    transition: transform 0.1s; 
+                    cursor: pointer;
+                }
                 .heat-square:hover { transform: scale(1.3); z-index: 10; border: 1px solid #fff; }
                 .lvl-1 { background: #4a2171; } .lvl-2 { background: #7131ab; } .lvl-3 { background: #9b51e0; } .lvl-4 { background: #d09cff; }
             </style>
@@ -310,7 +329,7 @@ app.get('/hud-livros/graficos', async (req, res) => {
                 }
                 renderizarHeatmap();
 
-                // FUNÇÃO DO TOOLTIP FLUTUANTE (Imagens no Hover)
+                // capas flutuantes
                 const geradorDeTooltip = (context) => {
                     const chart = context.chart;
                     const tooltip = context.tooltip;
@@ -398,7 +417,7 @@ app.get('/hud-livros/graficos', async (req, res) => {
                             maintainAspectRatio: false, 
                             plugins: { 
                                 legend: { display: false },
-                                tooltip: { enabled: false, external: geradorDeTooltip } // Desliga tooltip normal e usa o nosso
+                                tooltip: { enabled: false, external: geradorDeTooltip } // Desliga tooltip normal
                             }, 
                             scales: { x: { grid: { display: false } }, y: { grid: { color: '#333' }, beginAtZero: true, ticks: { stepSize: 1 } } } 
                         }
