@@ -114,6 +114,9 @@ app.get('/hud-livros/cards', async (req, res) => {
 });
 
 // Parte 2 - gráficos
+// ==========================================
+// ROTA 2: GRÁFICOS (Com Mapa de Calor Inteligente e Capas)
+// ==========================================
 app.get('/hud-livros/graficos', async (req, res) => {
     try {
         const notionHeaders = { "Authorization": `Bearer ${process.env.NOTION_API_KEY}`, "Notion-Version": "2022-06-28", "Content-Type": "application/json" };
@@ -134,7 +137,6 @@ app.get('/hud-livros/graficos', async (req, res) => {
         const contagemAnos = {};
         const contagemMesesPorAno = {}; 
         const contagemGeneros = {};
-        
         const capasPorAno = {};
         const capasPorMes = {};
 
@@ -144,7 +146,7 @@ app.get('/hud-livros/graficos', async (req, res) => {
 
             const ano = dataTermino.substring(0, 4);
             const mes = dataTermino.substring(5, 7); 
-
+            
             let titulo = "Desconhecido";
             try { titulo = livro.properties["Livros"].title[0].plain_text; } catch(e){}
             
@@ -191,9 +193,16 @@ app.get('/hud-livros/graficos', async (req, res) => {
         const mapaCalorDados = {};
         todoDiario.forEach(registro => {
             const dataRegistro = registro.properties["Data"]?.date?.start;
-            const paginas = registro.properties["# Páginas Lidas"]?.number || 0;
+            
+            let paginas = 0;
+            const propriedadeNumero = Object.values(registro.properties).find(p => p.type === 'number');
+            if (propriedadeNumero) {
+                paginas = propriedadeNumero.number || 0;
+            }
+
             if (dataRegistro && paginas > 0) {
-                mapaCalorDados[dataRegistro.substring(0, 10)] = (mapaCalorDados[dataRegistro.substring(0, 10)] || 0) + paginas;
+                const dataCurta = dataRegistro.substring(0, 10);
+                mapaCalorDados[dataCurta] = (mapaCalorDados[dataCurta] || 0) + paginas;
             }
         });
 
@@ -219,28 +228,9 @@ app.get('/hud-livros/graficos', async (req, res) => {
                 select, button { background: #333; color: #fff; border: 1px solid #444; border-radius: 4px; padding: 6px 10px; font-size: 12px; cursor: pointer; outline: none; }
                 button.active { background: #9b51e0; border-color: #9b51e0; }
                 .canvas-container { flex-grow: 1; position: relative; min-height: 0; }
-                .heatmap-container { 
-                    display: flex; 
-                    gap: 6px; 
-                    justify-content: center; 
-                    align-items: center; 
-                    flex-grow: 1; 
-                    overflow-x: auto; 
-                    padding: 20px;
-                }
-                .heatmap-col { 
-                    display: flex; 
-                    flex-direction: column; 
-                    gap: 6px; 
-                }
-                .heat-square { 
-                    width: 20px; 
-                    height: 20px; 
-                    background: #333; 
-                    border-radius: 4px; 
-                    transition: transform 0.1s; 
-                    cursor: pointer;
-                }
+                .heatmap-container { display: flex; gap: 6px; justify-content: center; align-items: center; flex-grow: 1; overflow-x: auto; padding: 20px;}
+                .heatmap-col { display: flex; flex-direction: column; gap: 6px; }
+                .heat-square { width: 20px; height: 20px; background: #333; border-radius: 4px; transition: transform 0.1s; cursor: pointer;}
                 .heat-square:hover { transform: scale(1.3); z-index: 10; border: 1px solid #fff; }
                 .lvl-1 { background: #4a2171; } .lvl-2 { background: #7131ab; } .lvl-3 { background: #9b51e0; } .lvl-4 { background: #d09cff; }
             </style>
@@ -304,7 +294,12 @@ app.get('/hud-livros/graficos', async (req, res) => {
                     let colAtual = '<div class="heatmap-col">';
                     
                     for (let i = 0; i < 365; i++) {
-                        const dataString = dataAtual.toISOString().split('T')[0];
+                        // CORREÇÃO: Pega a data baseada no Fuso Horário Local e não no UTC global
+                        const y = dataAtual.getFullYear();
+                        const m = String(dataAtual.getMonth() + 1).padStart(2, '0');
+                        const d = String(dataAtual.getDate()).padStart(2, '0');
+                        const dataString = y + '-' + m + '-' + d;
+
                         const paginas = mapaCalorDados[dataString] || 0;
                         
                         let classeNivel = '';
@@ -313,7 +308,7 @@ app.get('/hud-livros/graficos', async (req, res) => {
                         else if (paginas > 30 && paginas <= 60) classeNivel = 'lvl-3';
                         else if (paginas > 60) classeNivel = 'lvl-4';
 
-                        const dataFormatada = dataString.split('-').reverse().join('/');
+                        const dataFormatada = d + '/' + m + '/' + y;
                         const titulo = paginas > 0 ? paginas + ' páginas em ' + dataFormatada : 'Nenhuma página em ' + dataFormatada;
 
                         colAtual += '<div class="heat-square ' + classeNivel + '" title="' + titulo + '"></div>';
@@ -329,7 +324,6 @@ app.get('/hud-livros/graficos', async (req, res) => {
                 }
                 renderizarHeatmap();
 
-                // capas flutuantes
                 const geradorDeTooltip = (context) => {
                     const chart = context.chart;
                     const tooltip = context.tooltip;
@@ -375,7 +369,6 @@ app.get('/hud-livros/graficos', async (req, res) => {
                         let htmlInterno = '<p style="margin:0 0 8px 0; font-weight:bold; text-align:center; color:#9b51e0;">' + label + ': ' + value + ' livro(s)</p>';
                         htmlInterno += '<div style="display:flex; gap:6px; flex-wrap:wrap; max-width: 200px; justify-content:center;">';
                         
-                        // Cria uma miniatura para cada livro
                         livrosEncontrados.forEach(function(l) {
                             htmlInterno += '<img src="' + l.capa + '" title="' + l.titulo + '" style="width:40px; height:60px; object-fit:cover; border-radius:3px;">';
                         });
@@ -417,7 +410,7 @@ app.get('/hud-livros/graficos', async (req, res) => {
                             maintainAspectRatio: false, 
                             plugins: { 
                                 legend: { display: false },
-                                tooltip: { enabled: false, external: geradorDeTooltip } // Desliga tooltip normal
+                                tooltip: { enabled: false, external: geradorDeTooltip } 
                             }, 
                             scales: { x: { grid: { display: false } }, y: { grid: { color: '#333' }, beginAtZero: true, ticks: { stepSize: 1 } } } 
                         }
@@ -448,7 +441,6 @@ app.get('/hud-livros/graficos', async (req, res) => {
                 function toggleVisao() {
                     visaoAnoAtual = !visaoAnoAtual;
                     const btn = document.getElementById('btnVisao');
-                    // Esconde a div do tooltip para não bugar durante a transição
                     const tooltipEl = document.getElementById('chartjs-tooltip');
                     if(tooltipEl) tooltipEl.style.opacity = 0;
 
@@ -477,7 +469,7 @@ app.get('/hud-livros/graficos', async (req, res) => {
         </html>
         `;
         res.send(html);
-    } catch (erro) { res.send(`<body style="color:white; background:#191919;">Erro: ${erro.message}</body>`); }
+    } catch (erro) { res.send(`<body style="color:white; background:#191919;">Erro ao processar Gráficos: ${erro.message}</body>`); }
 });
 
 // Parte 3 - Galeria
