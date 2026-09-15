@@ -46,14 +46,33 @@ app.get('/hud-livros/cards', async (req, res) => {
         const inicioDoAno = new Date(anoAtual, 0, 1);
         const diasNoAno = Math.ceil((hoje - inicioDoAno) / (1000 * 60 * 60 * 24)) || 1;
 
-        const resLivros = await axios.post(`https://api.notion.com/v1/databases/${process.env.NOTION_DATABASE_LIVROS}/query`, {
-            filter: { property: "Finished", date: { on_or_after: `${anoAtual}-01-01` } }
-        }, { headers: notionHeaders });
-        
-        let totalPaginasGeral = 0;
-        resLivros.data.results.forEach(livro => {
-            totalPaginasGeral += livro.properties["Página total"]?.number || 0;
+        let todosOsLivros = [];
+        let temMais = true;
+        let cursor = undefined;
+
+        while (temMais) {
+            const body = { filter: { property: "Finished", date: { is_not_empty: true } }, page_size: 100 };
+            if (cursor) body.start_cursor = cursor;
+            const resLivros = await axios.post(`https://api.notion.com/v1/databases/${process.env.NOTION_DATABASE_LIVROS}/query`, body, { headers: notionHeaders });
+            todosOsLivros.push(...resLivros.data.results);
+            temMais = resLivros.data.has_more;
+            cursor = resLivros.data.next_cursor;
+        }
+
+        const totalLivrosHistorico = todosOsLivros.length;
+        let lidosEsteAno = 0;
+        let paginasEsteAno = 0;
+
+        todosOsLivros.forEach(livro => {
+            const dataTermino = livro.properties["Finished"]?.date?.start;
+            if (dataTermino && dataTermino.startsWith(anoAtual.toString())) {
+                lidosEsteAno++;
+                paginasEsteAno += livro.properties["Página total"]?.number || 0;
+            }
         });
+
+        const metaAno = 10;
+        const progressoMeta = Math.min((lidosEsteAno / metaAno) * 100, 100);
 
         const resDiario = await axios.post(`https://api.notion.com/v1/databases/${process.env.NOTION_DATABASE_DIARIO}/query`, {
             filter: { property: "Data", date: { on_or_after: `${anoAtual}-01-01` } }, page_size: 100
@@ -72,8 +91,8 @@ app.get('/hud-livros/cards', async (req, res) => {
 
         const diasComLeitura = diasUnicos.size || 1;
 
-        const velGeral = (totalPaginasGeral / diasNoAno).toFixed(1);
-        const velPorDiaLido = (paginasLidasDiario / diasComLeitura).toFixed(1);
+        const velGeral = Math.round(paginasEsteAno / diasNoAno);
+        const velPorDiaLido = Math.round(paginasLidasDiario / diasComLeitura);
 
         const html = `
         <!DOCTYPE html>
@@ -85,23 +104,57 @@ app.get('/hud-livros/cards', async (req, res) => {
                 * { box-sizing: border-box; }
                 body { margin: 0; padding: 15px; background-color: #191919; font-family: 'Inter', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
                 
-                .card { background: #252525; padding: 20px; border-radius: 12px; border-left: 4px solid #9b51e0; box-shadow: 0 4px 10px rgba(0,0,0,0.3); width: 100%; max-width: 300px; display: flex; flex-direction: column; position: relative;}
-                .card-title { color: #888; font-size: 12px; font-weight: bold; text-transform: uppercase; margin: 0 0 5px 0; display: flex; justify-content: space-between; align-items: center;}
-                .card-value { color: #fff; font-size: 32px; font-weight: bold; margin: 0; }
-                .card-sub { color: #9b51e0; font-size: 12px; font-weight: bold; margin: 5px 0 0 0; }
+                .cards-container { display: flex; gap: 15px; width: 100%; justify-content: center; }
                 
-                .toggle-btn { background: #333; color: #fff; border: none; border-radius: 4px; padding: 4px 8px; font-size: 10px; cursor: pointer; transition: 0.2s;}
-                .toggle-btn:hover { background: #9b51e0; }
+                .card { flex: 1; background: #252525; padding: 25px 15px; border-radius: 6px; border-left: 3px solid #9b51e0; box-shadow: 0 4px 6px rgba(0,0,0,0.3); display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; text-align: center; min-width: 150px; }
+                
+                .card-title { color: #888; font-size: 10px; font-weight: bold; text-transform: uppercase; margin: 0 0 10px 0; letter-spacing: 1px; }
+                .card-value { color: #fff; font-size: 28px; font-weight: bold; margin: 0; }
+                .card-sub { color: #555; font-size: 10px; margin: 10px 0 0 0; }
+                
+                /* Barra da Meta (Card 2) */
+                .progress-wrapper { width: 100%; height: 4px; background: #333; border-radius: 2px; margin-top: 15px; overflow: hidden; }
+                .progress-fill { height: 100%; background: #9b51e0; border-radius: 2px; transition: width 0.3s ease; }
+                
+                /* Botão Alternar */
+                .toggle-btn { position: absolute; top: 10px; right: 10px; background: #333; color: #aaa; border: none; border-radius: 4px; padding: 4px 6px; font-size: 9px; font-weight: bold; cursor: pointer; text-transform: uppercase; transition: 0.2s;}
+                .toggle-btn:hover { background: #9b51e0; color: #fff; }
             </style>
         </head>
         <body>
-            <div class="card">
-                <p class="card-title">
-                    <span id="labelVelocidade">Velocidade Geral</span>
+            <div class="cards-container">
+                
+                <!-- Card 1: Total Vida -->
+                <div class="card">
+                    <p class="card-title">Total Vida</p>
+                    <p class="card-value">${totalLivrosHistorico}</p>
+                    <p class="card-sub">livros concluídos</p>
+                </div>
+                
+                <!-- Card 2: Meta do Ano -->
+                <div class="card">
+                    <p class="card-title">Meta ${anoAtual}</p>
+                    <p class="card-value">${lidosEsteAno} / ${metaAno}</p>
+                    <div class="progress-wrapper">
+                        <div class="progress-fill" style="width: ${progressoMeta}%;"></div>
+                    </div>
+                </div>
+
+                <!-- Card 3: Volume do Ano -->
+                <div class="card">
+                    <p class="card-title">Volume ${anoAtual}</p>
+                    <p class="card-value">${paginasEsteAno}</p>
+                    <p class="card-sub">páginas lidas</p>
+                </div>
+
+                <!-- Card 4: Velocidade com Toggle -->
+                <div class="card">
                     <button class="toggle-btn" onclick="alternarVelocidade()">Alternar</button>
-                </p>
-                <p class="card-value" id="valorVelocidade">${velGeral}</p>
-                <p class="card-sub">páginas / dia</p>
+                    <p class="card-title" id="labelVelocidade">Velocidade</p>
+                    <p class="card-value" id="valorVelocidade">${velGeral}</p>
+                    <p class="card-sub">páginas por dia</p>
+                </div>
+
             </div>
 
             <script>
@@ -109,10 +162,10 @@ app.get('/hud-livros/cards', async (req, res) => {
                 function alternarVelocidade() {
                     modoGeral = !modoGeral;
                     if (modoGeral) {
-                        document.getElementById('labelVelocidade').textContent = 'Velocidade Geral';
+                        document.getElementById('labelVelocidade').textContent = 'Média Geral';
                         document.getElementById('valorVelocidade').textContent = '${velGeral}';
                     } else {
-                        document.getElementById('labelVelocidade').textContent = 'Veloc. por Dia Lido';
+                        document.getElementById('labelVelocidade').textContent = 'Por Dia Efetivo';
                         document.getElementById('valorVelocidade').textContent = '${velPorDiaLido}';
                     }
                 }
@@ -121,7 +174,7 @@ app.get('/hud-livros/cards', async (req, res) => {
         </html>
         `;
         res.send(html);
-    } catch (erro) { res.send(`<body style="color:white;">Erro: ${erro.message}</body>`); }
+    } catch (erro) { res.send(`<body style="color:white; background:#191919;">Erro: ${erro.message}</body>`); }
 });
 
 // Parte 2 - gráficos
@@ -482,29 +535,16 @@ app.get('/hud-livros/graficos', async (req, res) => {
 // Parte 3 - Galeria
 app.get('/hud-livros/galeria', async (req, res) => {
     try {
-        const notionHeaders = {
-            "Authorization": `Bearer ${process.env.NOTION_API_KEY}`,
-            "Notion-Version": "2022-06-28",
-            "Content-Type": "application/json"
-        };
+        const notionHeaders = { "Authorization": `Bearer ${process.env.NOTION_API_KEY}`, "Notion-Version": "2022-06-28", "Content-Type": "application/json" };
 
-        const resLidos = await axios.post(
-            `https://api.notion.com/v1/databases/${process.env.NOTION_DATABASE_LIVROS}/query`,
-            { 
-                filter: { property: "Finished", date: { is_not_empty: true } },
-                sorts: [{ property: "Finished", direction: "descending" }],
-                page_size: 10 
-            }, 
+        const resLidos = await axios.post(`https://api.notion.com/v1/databases/${process.env.NOTION_DATABASE_LIVROS}/query`,
+            { filter: { property: "Finished", date: { is_not_empty: true } }, sorts: [{ property: "Finished", direction: "descending" }], page_size: 10 }, 
             { headers: notionHeaders }
         );
         const livrosLidos = resLidos.data.results;
 
-        const resFila = await axios.post(
-            `https://api.notion.com/v1/databases/${process.env.NOTION_DATABASE_LIVROS}/query`,
-            { 
-                filter: { property: "Ler a seguir", checkbox: { equals: true } },
-                page_size: 10 
-            }, 
+        const resFila = await axios.post(`https://api.notion.com/v1/databases/${process.env.NOTION_DATABASE_LIVROS}/query`,
+            { filter: { property: "Ler a seguir", checkbox: { equals: true } }, page_size: 10 }, 
             { headers: notionHeaders }
         );
         const livrosFila = resFila.data.results;
@@ -516,15 +556,16 @@ app.get('/hud-livros/galeria', async (req, res) => {
                 const autor = livro.properties["Autor"]?.select?.name || "Autor Desconhecido";
                 const paginas = livro.properties["Página total"]?.number || "?";
                 const generos = livro.properties["Gênero"]?.multi_select.map(g => g.name).join(", ") || "Sem Gênero";
-                let capa = livro.cover?.external?.url || livro.cover?.file?.url || livro.icon?.external?.url || "https://via.placeholder.com/200x300/252525/9b51e0?text=Sem+Capa";
+                let capa = "https://via.placeholder.com/200x300/252525/9b51e0?text=Sem+Capa";
+                if (livro.cover?.external?.url) capa = livro.cover.external.url;
+                else if (livro.cover?.file?.url) capa = livro.cover.file.url;
+                else if (livro.icon?.external?.url) capa = livro.icon.external.url;
                 
                 let sinopse = "Sem sinopse disponível.";
                 try {
                     const blocos = await axios.get(`https://api.notion.com/v1/blocks/${livro.id}/children`, { headers: notionHeaders });
                     const paragrafo = blocos.data.results.find(b => b.type === 'paragraph' && b.paragraph?.rich_text?.length > 0);
-                    if (paragrafo) {
-                        sinopse = paragrafo.paragraph.rich_text[0].plain_text.substring(0, 150) + "..."; 
-                    }
+                    if (paragrafo) sinopse = paragrafo.paragraph.rich_text[0].plain_text.substring(0, 200) + "..."; 
                 } catch (e) { }
 
                 formatados.push({ titulo, autor, paginas, generos, capa, sinopse });
@@ -532,10 +573,7 @@ app.get('/hud-livros/galeria', async (req, res) => {
             return formatados;
         }
 
-        const [dadosLidos, dadosFila] = await Promise.all([
-            extrairDados(livrosLidos),
-            extrairDados(livrosFila)
-        ]);
+        const [dadosLidos, dadosFila] = await Promise.all([ extrairDados(livrosLidos), extrairDados(livrosFila) ]);
 
         const html = `
         <!DOCTYPE html>
@@ -547,21 +585,23 @@ app.get('/hud-livros/galeria', async (req, res) => {
                 * { box-sizing: border-box; }
                 body { margin: 0; padding: 15px; background-color: #191919; font-family: 'Inter', sans-serif; color: #E0E0E0; display: flex; gap: 20px; height: 100vh; overflow: hidden; }
                 
-                .panel { flex: 1; background: #252525; border-radius: 8px; padding: 15px; display: flex; flex-direction: column; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-                .panel-header { font-size: 14px; font-weight: bold; color: #ccc; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 1px; }
+                .panel { flex: 1; background: #252525; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; box-shadow: 0 4px 10px rgba(0,0,0,0.5); border-top: 4px solid #9b51e0; }
+                .panel-header { font-size: 14px; font-weight: bold; color: #ccc; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 1px; text-align: center; }
                 
                 .carousel { display: flex; align-items: center; justify-content: space-between; flex-grow: 1; }
-                .nav-btn { background: #333; color: #fff; border: none; font-size: 20px; width: 35px; height: 35px; border-radius: 50%; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; }
+                .nav-btn { background: #333; color: #fff; border: none; font-size: 20px; width: 35px; height: 35px; border-radius: 50%; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
                 .nav-btn:hover { background: #9b51e0; transform: scale(1.1); }
                 
-                .book-card { display: flex; gap: 20px; flex-grow: 1; align-items: stretch; padding: 0 10px; }
-                .book-cover { width: 140px; border-radius: 6px; object-fit: cover; box-shadow: 2px 4px 10px rgba(0,0,0,0.5); }
-                .book-info { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+                /* Layout Vertical e Centralizado idêntico ao "Lendo no Momento" */
+                .book-card { display: flex; flex-direction: column; align-items: center; gap: 8px; flex-grow: 1; padding: 0 10px; text-align: center; }
+                .book-cover { width: 120px; height: 180px; border-radius: 4px; object-fit: cover; box-shadow: 2px 4px 10px rgba(0,0,0,0.5); }
                 
-                .b-title { font-size: 18px; font-weight: bold; color: #fff; margin: 0 0 5px 0; line-height: 1.2; }
-                .b-author { font-size: 13px; color: #9b51e0; margin: 0 0 10px 0; font-weight: bold; }
-                .b-meta { font-size: 11px; color: #888; margin: 0 0 10px 0; background: #191919; padding: 4px 8px; border-radius: 4px; display: inline-block; width: fit-content; }
-                .b-synopsis { font-size: 12px; color: #bbb; line-height: 1.5; margin: 0; font-style: italic; }
+                .b-title { font-size: 16px; font-weight: bold; color: #fff; margin: 5px 0 0 0; line-height: 1.2; }
+                .b-author { font-size: 13px; color: #9b51e0; margin: 0; font-weight: bold; }
+                .b-meta { font-size: 11px; color: #888; margin: 0; background: #191919; padding: 4px 8px; border-radius: 4px; display: inline-block; }
+                
+                /* Limita a sinopse a 3 linhas para não estourar a altura do painel */
+                .b-synopsis { font-size: 11px; color: #bbb; line-height: 1.4; margin: 5px 0 0 0; font-style: italic; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
             </style>
         </head>
         <body>
@@ -571,29 +611,25 @@ app.get('/hud-livros/galeria', async (req, res) => {
                     <button class="nav-btn" onclick="mudarLivro('lidos', -1)">❮</button>
                     <div class="book-card">
                         <img id="imgLido" class="book-cover" src="">
-                        <div class="book-info">
-                            <p id="tituloLido" class="b-title"></p>
-                            <p id="autorLido" class="b-author"></p>
-                            <p id="metaLido" class="b-meta"></p>
-                            <p id="sinopseLido" class="b-synopsis"></p>
-                        </div>
+                        <p id="tituloLido" class="b-title"></p>
+                        <p id="autorLido" class="b-author"></p>
+                        <p id="metaLido" class="b-meta"></p>
+                        <p id="sinopseLido" class="b-synopsis"></p>
                     </div>
                     <button class="nav-btn" onclick="mudarLivro('lidos', 1)">❯</button>
                 </div>
             </div>
 
-            <div class="panel" style="border-left: 4px solid #9b51e0;">
+            <div class="panel">
                 <div class="panel-header">Ler a Seguir</div>
                 <div class="carousel">
                     <button class="nav-btn" onclick="mudarLivro('fila', -1)">❮</button>
                     <div class="book-card">
                         <img id="imgFila" class="book-cover" src="">
-                        <div class="book-info">
-                            <p id="tituloFila" class="b-title"></p>
-                            <p id="autorFila" class="b-author"></p>
-                            <p id="metaFila" class="b-meta"></p>
-                            <p id="sinopseFila" class="b-synopsis"></p>
-                        </div>
+                        <p id="tituloFila" class="b-title"></p>
+                        <p id="autorFila" class="b-author"></p>
+                        <p id="metaFila" class="b-meta"></p>
+                        <p id="sinopseFila" class="b-synopsis"></p>
                     </div>
                     <button class="nav-btn" onclick="mudarLivro('fila', 1)">❯</button>
                 </div>
@@ -612,8 +648,8 @@ app.get('/hud-livros/galeria', async (req, res) => {
                     const sufixo = tipo === 'lidos' ? 'Lido' : 'Fila';
 
                     if (!dados || dados.length === 0) {
-                        document.getElementById('titulo' + sufixo).textContent = "Nenhum livro marcado.";
-                        document.getElementById('img' + sufixo).src = "https://via.placeholder.com/200x300/252525/9b51e0?text=Vazio";
+                        document.getElementById('titulo' + sufixo).textContent = "Nenhum livro listado.";
+                        document.getElementById('img' + sufixo).src = "https://via.placeholder.com/120x180/252525/9b51e0?text=Vazio";
                         document.getElementById('autor' + sufixo).textContent = "";
                         document.getElementById('meta' + sufixo).textContent = "";
                         document.getElementById('sinopse' + sufixo).textContent = "";
