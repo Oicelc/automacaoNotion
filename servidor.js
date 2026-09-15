@@ -548,7 +548,7 @@ app.get('/hud-livros/galeria', async (req, res) => {
         </head>
         <body>
             <div class="panel">
-                <div class="panel-header">✅ Últimas Leituras</div>
+                <div class="panel-header">Últimas Leituras</div>
                 <div class="carousel">
                     <button class="nav-btn" onclick="mudarLivro('lidos', -1)">❮</button>
                     <div class="book-card">
@@ -565,7 +565,7 @@ app.get('/hud-livros/galeria', async (req, res) => {
             </div>
 
             <div class="panel" style="border-left: 4px solid #9b51e0;">
-                <div class="panel-header">⏳ Ler a Seguir</div>
+                <div class="panel-header">Ler a Seguir</div>
                 <div class="carousel">
                     <button class="nav-btn" onclick="mudarLivro('fila', -1)">❮</button>
                     <div class="book-card">
