@@ -4,6 +4,8 @@ const axios = require('axios');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+app.use(express.json());
+
 const notionHeaders = {
     "Authorization": `Bearer ${process.env.NOTION_API_KEY}`,
     "Notion-Version": "2022-06-28",
@@ -38,27 +40,40 @@ async function buscarTodosLivros() {
 // Parte 1 - cards
 app.get('/hud-livros/cards', async (req, res) => {
     try {
-        const livros = await buscarTodosLivros();
-        const livrosLidosTotal = livros.length;
-        
-        let lidos2026 = 0;
-        let paginas2026 = 0;
+        const notionHeaders = { "Authorization": `Bearer ${process.env.NOTION_API_KEY}`, "Notion-Version": "2022-06-28", "Content-Type": "application/json" };
+        const hoje = new Date();
+        const anoAtual = hoje.getFullYear();
+        const inicioDoAno = new Date(anoAtual, 0, 1);
+        const diasNoAno = Math.ceil((hoje - inicioDoAno) / (1000 * 60 * 60 * 24)) || 1;
 
-        livros.forEach(livro => {
-            const dataTermino = livro.properties["Finished"]?.date?.start;
-            if (dataTermino && dataTermino.startsWith("2026")) {
-                lidos2026++;
-                paginas2026 += livro.properties["Página total"]?.number || 0;
-            }
+        const resLivros = await axios.post(`https://api.notion.com/v1/databases/${process.env.NOTION_DATABASE_LIVROS}/query`, {
+            filter: { property: "Finished", date: { on_or_after: `${anoAtual}-01-01` } }
+        }, { headers: notionHeaders });
+        
+        let totalPaginasGeral = 0;
+        resLivros.data.results.forEach(livro => {
+            totalPaginasGeral += livro.properties["Página total"]?.number || 0;
         });
 
-        const metaAnual = 10;
-        const porcentagem = Math.min(Math.floor((lidos2026 / metaAnual) * 100), 100);
+        const resDiario = await axios.post(`https://api.notion.com/v1/databases/${process.env.NOTION_DATABASE_DIARIO}/query`, {
+            filter: { property: "Data", date: { on_or_after: `${anoAtual}-01-01` } }, page_size: 100
+        }, { headers: notionHeaders });
 
-        const inicioAno = new Date("2026-01-01");
-        const hoje = new Date();
-        const diasPassados = Math.max(Math.ceil((hoje - inicioAno) / (1000 * 60 * 60 * 24)), 1);
-        const paginasPorDia = (paginas2026 / diasPassados).toFixed(1);
+        let paginasLidasDiario = 0;
+        let diasUnicos = new Set();
+
+        resDiario.data.results.forEach(reg => {
+            const numProp = Object.values(reg.properties).find(p => p.type === 'number');
+            if (numProp && numProp.number > 0) paginasLidasDiario += numProp.number;
+            
+            const dataProp = Object.values(reg.properties).find(p => p.type === 'date');
+            if (dataProp && dataProp.date?.start) diasUnicos.add(dataProp.date.start.substring(0, 10));
+        });
+
+        const diasComLeitura = diasUnicos.size || 1;
+
+        const velGeral = (totalPaginasGeral / diasNoAno).toFixed(1);
+        const velPorDiaLido = (paginasLidasDiario / diasComLeitura).toFixed(1);
 
         const html = `
         <!DOCTYPE html>
@@ -68,55 +83,48 @@ app.get('/hud-livros/cards', async (req, res) => {
             <style>
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
                 * { box-sizing: border-box; }
-                body {
-                    margin: 0; padding: 5px; background-color: #191919;
-                    color: #E0E0E0; font-family: 'Inter', sans-serif;
-                    display: flex; justify-content: space-between; gap: 15px;
-                }
-                .card {
-                    background: #252525; border-left: 4px solid #9b51e0;
-                    padding: 15px; border-radius: 8px; flex: 1; text-align: center;
-                    box-shadow: 0 4px 6px rgba(0,0,0,0.3); display: flex; flex-direction: column; justify-content: center;
-                }
-                .title { font-size: 11px; text-transform: uppercase; color: #888; margin: 0 0 8px 0; }
-                .value { font-size: 28px; font-weight: bold; color: #fff; margin: 0; }
-                .progress-bg { background: #333; border-radius: 10px; height: 6px; width: 100%; margin-top: 10px; }
-                .progress-bar { background: #9b51e0; height: 100%; width: ${porcentagem}%; }
-                .sub-text { font-size: 10px; color: #777; margin-top: 5px; }
+                body { margin: 0; padding: 15px; background-color: #191919; font-family: 'Inter', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
+                
+                .card { background: #252525; padding: 20px; border-radius: 12px; border-left: 4px solid #9b51e0; box-shadow: 0 4px 10px rgba(0,0,0,0.3); width: 100%; max-width: 300px; display: flex; flex-direction: column; position: relative;}
+                .card-title { color: #888; font-size: 12px; font-weight: bold; text-transform: uppercase; margin: 0 0 5px 0; display: flex; justify-content: space-between; align-items: center;}
+                .card-value { color: #fff; font-size: 32px; font-weight: bold; margin: 0; }
+                .card-sub { color: #9b51e0; font-size: 12px; font-weight: bold; margin: 5px 0 0 0; }
+                
+                .toggle-btn { background: #333; color: #fff; border: none; border-radius: 4px; padding: 4px 8px; font-size: 10px; cursor: pointer; transition: 0.2s;}
+                .toggle-btn:hover { background: #9b51e0; }
             </style>
         </head>
         <body>
             <div class="card">
-                <p class="title">Total Vida</p>
-                <p class="value">${livrosLidosTotal}</p>
-                <p class="sub-text">livros concluídos</p>
+                <p class="card-title">
+                    <span id="labelVelocidade">Velocidade Geral</span>
+                    <button class="toggle-btn" onclick="alternarVelocidade()">Alternar</button>
+                </p>
+                <p class="card-value" id="valorVelocidade">${velGeral}</p>
+                <p class="card-sub">páginas / dia</p>
             </div>
-            <div class="card">
-                <p class="title">Meta 2026</p>
-                <p class="value">${lidos2026} / ${metaAnual}</p>
-                <div class="progress-bg"><div class="progress-bar"></div></div>
-            </div>
-            <div class="card">
-                <p class="title">Volume 2026</p>
-                <p class="value">${paginas2026}</p>
-                <p class="sub-text">páginas lidas</p>
-            </div>
-            <div class="card">
-                <p class="title">Velocidade</p>
-                <p class="value">${paginasPorDia}</p>
-                <p class="sub-text">páginas por dia</p>
-            </div>
+
+            <script>
+                let modoGeral = true;
+                function alternarVelocidade() {
+                    modoGeral = !modoGeral;
+                    if (modoGeral) {
+                        document.getElementById('labelVelocidade').textContent = 'Velocidade Geral';
+                        document.getElementById('valorVelocidade').textContent = '${velGeral}';
+                    } else {
+                        document.getElementById('labelVelocidade').textContent = 'Veloc. por Dia Lido';
+                        document.getElementById('valorVelocidade').textContent = '${velPorDiaLido}';
+                    }
+                }
+            </script>
         </body>
         </html>
         `;
         res.send(html);
-    } catch (erro) { res.send(`<body style="color:white; background:#191919;">Erro: ${erro.message}</body>`); }
+    } catch (erro) { res.send(`<body style="color:white;">Erro: ${erro.message}</body>`); }
 });
 
 // Parte 2 - gráficos
-// ==========================================
-// ROTA 2: GRÁFICOS (Com Mapa de Calor Inteligente e Capas)
-// ==========================================
 app.get('/hud-livros/graficos', async (req, res) => {
     try {
         const notionHeaders = { "Authorization": `Bearer ${process.env.NOTION_API_KEY}`, "Notion-Version": "2022-06-28", "Content-Type": "application/json" };
@@ -294,7 +302,6 @@ app.get('/hud-livros/graficos', async (req, res) => {
                     let colAtual = '<div class="heatmap-col">';
                     
                     for (let i = 0; i < 365; i++) {
-                        // CORREÇÃO: Pega a data baseada no Fuso Horário Local e não no UTC global
                         const y = dataAtual.getFullYear();
                         const m = String(dataAtual.getMonth() + 1).padStart(2, '0');
                         const d = String(dataAtual.getDate()).padStart(2, '0');
@@ -647,4 +654,231 @@ app.get('/hud-livros/galeria', async (req, res) => {
     } catch (erro) { res.send(`<body style="color:white; background:#191919;">Erro: ${erro.message}</body>`); }
 });
 
-app.listen(PORT, () => { console.log(`🌐 Servidor rodando na porta ${PORT}`); });
+// Parte 4 - Receber dados e criar página
+app.post('/hud-livros/registrar-leitura', async (req, res) => {
+    try {
+        const { livroId, paginas } = req.body;
+        
+        const hoje = new Date();
+        const y = hoje.getFullYear();
+        const m = String(hoje.getMonth() + 1).padStart(2, '0');
+        const d = String(hoje.getDate()).padStart(2, '0');
+        const dataAtual = `${y}-${m}-${d}`;
+
+        const notionHeaders = { 
+            "Authorization": `Bearer ${process.env.NOTION_API_KEY}`, 
+            "Notion-Version": "2022-06-28", 
+            "Content-Type": "application/json" 
+        };
+
+        const payload = {
+            parent: { database_id: process.env.NOTION_DATABASE_DIARIO },
+            properties: {
+                "Nome": { 
+                    title: [{ text: { content: "Registro Automático" } }] 
+                },
+                "Data": { 
+                    date: { start: dataAtual } 
+                },
+                "Páginas Lidas": { 
+                    number: parseInt(paginas) 
+                },
+                "Leitura": { 
+                    relation: [{ id: livroId }] 
+                }
+            }
+        };
+
+        await axios.post('https://api.notion.com/v1/pages', payload, { headers: notionHeaders });
+        
+        res.status(200).json({ message: "Leitura registrada com sucesso!" });
+    } catch (erro) {
+        console.error("Erro ao salvar:", erro.response?.data || erro.message);
+        res.status(500).json({ error: "Falha ao registrar no Notion." });
+    }
+});
+
+// Parte 5 - Lendo no momento (interativo)
+app.get('/hud-livros/lendo', async (req, res) => {
+    try {
+        const notionHeaders = { "Authorization": `Bearer ${process.env.NOTION_API_KEY}`, "Notion-Version": "2022-06-28", "Content-Type": "application/json" };
+
+        const respostaLivros = await axios.post(`https://api.notion.com/v1/databases/${process.env.NOTION_DATABASE_LIVROS}/query`, { 
+            filter: { property: "Status", select: { equals: "Lendo" } },
+            page_size: 10 
+        }, { headers: notionHeaders });
+        
+        const livrosLendo = respostaLivros.data.results;
+
+        const dados = [];
+        for (const livro of livrosLendo) {
+            const id = livro.id;
+            const titulo = livro.properties["Livros"]?.title[0]?.plain_text || "Sem Título";
+            const totalPaginas = livro.properties["Página total"]?.number || 1; 
+            
+            let capa = "https://via.placeholder.com/200x300/252525/9b51e0?text=Sem+Capa";
+            if (livro.cover?.external?.url) capa = livro.cover.external.url;
+            else if (livro.cover?.file?.url) capa = livro.cover.file.url;
+            else if (livro.icon?.external?.url) capa = livro.icon.external.url;
+
+            const resDiario = await axios.post(`https://api.notion.com/v1/databases/${process.env.NOTION_DATABASE_DIARIO}/query`, {
+                filter: { property: "Leitura", relation: { contains: id } }
+            }, { headers: notionHeaders });
+
+            let paginasLidas = 0;
+            let datasDeLeitura = [];
+
+            resDiario.data.results.forEach(reg => {
+                const numProp = Object.values(reg.properties).find(p => p.type === 'number');
+                if (numProp && numProp.number) paginasLidas += numProp.number;
+                
+                const dataProp = Object.values(reg.properties).find(p => p.type === 'date');
+                if (dataProp && dataProp.date?.start) datasDeLeitura.push(new Date(dataProp.date.start));
+            });
+
+            let progresso = Math.floor((paginasLidas / totalPaginas) * 100);
+            if (progresso > 100) progresso = 100;
+
+            let diasLendo = 0;
+            if (datasDeLeitura.length > 0) {
+                const dataMaisAntiga = new Date(Math.min(...datasDeLeitura));
+                const hoje = new Date();
+                diasLendo = Math.ceil(Math.abs(hoje - dataMaisAntiga) / (1000 * 60 * 60 * 24));
+            }
+            if (diasLendo === 0 && paginasLidas > 0) diasLendo = 1;
+
+            dados.push({ id, titulo, capa, progresso, diasLendo });
+        }
+
+        const html = `
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+        <head>
+            <meta charset="UTF-8">
+            <style>
+                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+                * { box-sizing: border-box; }
+                body { margin: 0; padding: 15px; background-color: #191919; font-family: 'Inter', sans-serif; color: #E0E0E0; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
+                
+                .panel { background: #252525; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; box-shadow: 0 4px 10px rgba(0,0,0,0.5); width: 100%; max-width: 400px; border-top: 4px solid #9b51e0; }
+                .panel-header { font-size: 14px; font-weight: bold; color: #ccc; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 1px; text-align: center;}
+                
+                .carousel { display: flex; align-items: center; justify-content: space-between; }
+                .nav-btn { background: #333; color: #fff; border: none; font-size: 20px; width: 35px; height: 35px; border-radius: 50%; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; }
+                .nav-btn:hover { background: #9b51e0; transform: scale(1.1); }
+                
+                .book-card { display: flex; flex-direction: column; align-items: center; gap: 8px; flex-grow: 1; padding: 0 10px; }
+                
+                .cover-wrapper { padding: 4px; border-radius: 8px; display: inline-block; box-shadow: 0 4px 15px rgba(0,0,0,0.5); transition: background 0.3s ease; }
+                .book-cover { width: 120px; height: 180px; border-radius: 4px; object-fit: cover; display: block; }
+                
+                .b-progresso { font-size: 14px; font-weight: bold; color: #9b51e0; margin: 10px 0 0 0; }
+                .b-title { font-size: 16px; font-weight: bold; color: #fff; margin: 0; text-align: center; line-height: 1.2; }
+                .b-dias { font-size: 12px; font-weight: bold; color: #9b51e0; margin: 0 0 10px 0; }
+                
+                .input-group { display: flex; gap: 8px; width: 100%; }
+                input[type="number"] { flex: 1; background: #191919; border: 1px solid #444; color: #fff; padding: 8px 12px; border-radius: 4px; font-family: 'Inter'; outline: none; }
+                input[type="number"]:focus { border-color: #9b51e0; }
+                .btn-submit { background: #9b51e0; color: #fff; border: none; padding: 8px 15px; border-radius: 4px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+                .btn-submit:hover { background: #7131ab; }
+                
+                #mensagem { font-size: 12px; text-align: center; margin-top: 5px; min-height: 15px; color: #4ade80; font-weight: bold; }
+            </style>
+        </head>
+        <body>
+            <div class="panel">
+                <div class="panel-header">Lendo no Momento</div>
+                <div class="carousel">
+                    <button class="nav-btn" onclick="mudarLivro(-1)">❮</button>
+                    <div class="book-card">
+                        
+                        <div id="coverWrapper" class="cover-wrapper" style="background: conic-gradient(#4ade80 0%, #333 0);">
+                            <img id="imgCapa" class="book-cover" src="">
+                        </div>
+                        
+                        <p id="txtProgresso" class="b-progresso"></p>
+                        <p id="tituloLivro" class="b-title"></p>
+                        <p id="txtDias" class="b-dias"></p>
+                        
+                        <div class="input-group">
+                            <input type="number" id="inputPaginas" placeholder="Páginas de hoje..." min="1">
+                            <button class="btn-submit" id="btnSalvar" onclick="enviarLeitura()">OK</button>
+                        </div>
+                        <p id="mensagem"></p>
+                    </div>
+                    <button class="nav-btn" onclick="mudarLivro(1)">❯</button>
+                </div>
+            </div>
+
+            <script>
+                const lista = ${JSON.stringify(dados)};
+                let indexAtual = 0;
+
+                function renderizarLivro() {
+                    if (lista.length === 0) {
+                        document.getElementById('tituloLivro').textContent = "Nenhum livro em andamento.";
+                        return;
+                    }
+                    const livro = lista[indexAtual];
+                    
+                    document.getElementById('imgCapa').src = livro.capa;
+                    document.getElementById('tituloLivro').textContent = livro.titulo;
+                    document.getElementById('txtProgresso').textContent = livro.progresso + "%";
+                    
+                    const textoDia = livro.diasLendo === 1 ? "Lendo há 1 dia" : "Lendo há " + livro.diasLendo + " dias";
+                    document.getElementById('txtDias').textContent = textoDia;
+
+                    document.getElementById('coverWrapper').style.background = \`conic-gradient(#4ade80 \${livro.progresso}%, #333 0)\`;
+                    
+                    document.getElementById('mensagem').textContent = ""; 
+                    document.getElementById('inputPaginas').value = ""; 
+                }
+
+                function mudarLivro(direcao) {
+                    if (lista.length === 0) return;
+                    indexAtual += direcao;
+                    if (indexAtual < 0) indexAtual = lista.length - 1;
+                    if (indexAtual >= lista.length) indexAtual = 0;
+                    renderizarLivro();
+                }
+
+                async function enviarLeitura() {
+                    const paginas = document.getElementById('inputPaginas').value;
+                    const btn = document.getElementById('btnSalvar');
+                    const msg = document.getElementById('mensagem');
+                    
+                    if (!paginas || paginas <= 0) {
+                        msg.style.color = "#ff4d4d"; msg.textContent = "Insira um número válido!"; return;
+                    }
+
+                    btn.textContent = ""; btn.disabled = true; msg.textContent = "";
+
+                    try {
+                        const resposta = await fetch('/hud-livros/registrar-leitura', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ livroId: lista[indexAtual].id, paginas: paginas })
+                        });
+
+                        if (resposta.ok) {
+                            msg.style.color = "#4ade80"; msg.textContent = "Salvo! (Atualize a página para ver a borda avançar)";
+                            document.getElementById('inputPaginas').value = "";
+                        } else { throw new Error("Falha na API"); }
+                    } catch (erro) {
+                        msg.style.color = "#ff4d4d"; msg.textContent = "Erro ao salvar.";
+                    } finally {
+                        btn.textContent = "OK"; btn.disabled = false;
+                        setTimeout(() => { if (msg.textContent.includes("❌")) msg.textContent = ""; }, 3000);
+                    }
+                }
+
+                renderizarLivro();
+            </script>
+        </body>
+        </html>
+        `;
+        res.send(html);
+    } catch (erro) { res.send(`<body style="color:white; background:#191919;">Erro: ${erro.message}</body>`); }
+});
+
+app.listen(PORT, () => { console.log(`Servidor rodando na porta ${PORT}`); });
