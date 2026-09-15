@@ -571,6 +571,7 @@ app.get('/hud-livros/galeria', async (req, res) => {
                 const autor = livro.properties["Autor"]?.select?.name || "Autor Desconhecido";
                 const paginas = livro.properties["Página total"]?.number || "?";
                 const generos = livro.properties["Gênero"]?.multi_select.map(g => g.name).join(", ") || "Sem Gênero";
+                const url = livro.url;
                 let capa = "https://via.placeholder.com/200x300/252525/9b51e0?text=Sem+Capa";
                 if (livro.cover?.external?.url) capa = livro.cover.external.url;
                 else if (livro.cover?.file?.url) capa = livro.cover.file.url;
@@ -598,7 +599,7 @@ app.get('/hud-livros/galeria', async (req, res) => {
                     }
                 }
 
-                formatados.push({ titulo, autor, paginas, generos, capa, sinopse, dataFormatada, diasLidos });
+                formatados.push({ titulo, autor, paginas, generos, capa, sinopse, dataFormatada, diasLidos, url });
             }
             return formatados;
         }
@@ -623,7 +624,8 @@ app.get('/hud-livros/galeria', async (req, res) => {
                 .nav-btn:hover { background: #9b51e0; transform: scale(1.1); }
                 
                 .book-card { display: flex; flex-direction: row; align-items: center; gap: 15px; flex-grow: 1; padding: 0 5px; text-align: left; }
-                .book-cover { width: 100px; height: 150px; border-radius: 4px; object-fit: cover; box-shadow: 2px 4px 10px rgba(0,0,0,0.5); flex-shrink:0; }
+                .book-cover { width: 100px; height: 150px; border-radius: 4px; object-fit: cover; box-shadow: 2px 4px 10px rgba(0,0,0,0.5); flex-shrink:0; cursor: pointer; transition: transform 0.2s; }
+                .book-cover:hover { transform: scale(1.05); }
                 .book-info { display: flex; flex-direction: column; justify-content: center; flex: 1;}
                 .b-stats { font-size: 11px; color: #9b51e0; margin 0 0 8px 0; font-weight: bold; }
                 
@@ -698,6 +700,7 @@ app.get('/hud-livros/galeria', async (req, res) => {
                     document.getElementById('autor' + sufixo).textContent = livro.autor;
                     document.getElementById('meta' + sufixo).textContent = livro.paginas + ' págs  •  ' + livro.generos;
                     document.getElementById('sinopse' + sufixo).textContent = '"' + livro.sinopse + '"';
+                    document.getElementById('img' + sufixo).onclick = function() { window.open(livro.url, '_blank'); };
 
                     if (tipo === 'lidos') {
                         let textoStats = "Finalizado em " + (livro.dataFormatada || "?");
@@ -828,7 +831,7 @@ app.get('/hud-livros/lendo', async (req, res) => {
             }
             if (diasLendo === 0 && paginasLidas > 0) diasLendo = 1;
 
-            dados.push({ id, titulo, capa, progresso, diasLendo });
+            dados.push({ id, titulo, capa, progresso, diasLendo, url: livro.url });
         }
 
         const html = `
@@ -851,7 +854,8 @@ app.get('/hud-livros/lendo', async (req, res) => {
                 .book-card { display: flex; flex-direction: column; align-items: center; gap: 8px; flex-grow: 1; padding: 0 10px; }
                 
                 .cover-wrapper { padding: 4px; border-radius: 8px; display: inline-block; box-shadow: 0 4px 15px rgba(0,0,0,0.5); transition: background 0.3s ease; }
-                .book-cover { width: 120px; height: 180px; border-radius: 4px; object-fit: cover; display: block; }
+                .book-cover { width: 120px; height: 180px; border-radius: 4px; object-fit: cover; display: block; cursor: pointer; transition: transform 0.2s; }
+                .book-cover:hover { transform: scale(1.05); }
                 
                 .b-progresso { font-size: 14px; font-weight: bold; color: #9b51e0; margin: 10px 0 0 0; }
                 .b-title { font-size: 16px; font-weight: bold; color: #fff; margin: 0; text-align: center; line-height: 1.2; }
@@ -908,6 +912,8 @@ app.get('/hud-livros/lendo', async (req, res) => {
                     
                     const textoDia = livro.diasLendo === 1 ? "Lendo há 1 dia" : "Lendo há " + livro.diasLendo + " dias";
                     document.getElementById('txtDias').textContent = textoDia;
+
+                    document.getElementById('imgCapa').onclick = function() { window.open(livro.url, '_blank'); };
 
                     document.getElementById('coverWrapper').style.background = \`conic-gradient(#4ade80 \${livro.progresso}%, #333 0)\`;
                     
