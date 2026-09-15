@@ -583,7 +583,22 @@ app.get('/hud-livros/galeria', async (req, res) => {
                     if (paragrafo) sinopse = paragrafo.paragraph.rich_text[0].plain_text.substring(0, 200) + "..."; 
                 } catch (e) { }
 
-                formatados.push({ titulo, autor, paginas, generos, capa, sinopse });
+                let dataFormatada = "";
+                let diasLidos = "";
+                const dataFimStr = livro.properties["Finished"]?.date?.start;
+                if (dataFimStr) {
+                    const [ano, mes, dia] = dataFimStr.split("-");
+                    dataFormatada = `${dia}/${mes}/${ano}`;
+                    const dataInicioStr = livro.properties["Started"]?.date?.start;
+                    if (dataInicioStr) {
+                        const fim = new Date(dataFimStr);
+                        const inicio = new Date(dataInicioStr);
+                        const diffDias = Math.ceil(Math.abs(fim-inicio) / (1000 * 60 * 60 * 24));
+                        diasLidos = diffDias === 0 ? 1 : diffDias;
+                    }
+                }
+
+                formatados.push({ titulo, autor, paginas, generos, capa, sinopse, dataFormatada, diasLidos });
             }
             return formatados;
         }
@@ -600,16 +615,17 @@ app.get('/hud-livros/galeria', async (req, res) => {
                 * { box-sizing: border-box; }
                 body { margin: 0; padding: 15px; background-color: #191919; font-family: 'Inter', sans-serif; color: #E0E0E0; display: flex; gap: 20px; height: 100vh; overflow: hidden; }
                 
-                .panel { flex: 1; background: #252525; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; box-shadow: 0 4px 10px rgba(0,0,0,0.5); border-top: 4px solid #9b51e0; }
+                .panel { flex: 1; background: #252525; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; box-shadow: 0 4px 10px rgba(0,0,0,0.5); border-top: 4px solid #9b51e0; height: 100%;}
                 .panel-header { font-size: 14px; font-weight: bold; color: #ccc; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 1px; text-align: center; }
                 
                 .carousel { display: flex; align-items: center; justify-content: space-between; flex-grow: 1; }
                 .nav-btn { background: #333; color: #fff; border: none; font-size: 20px; width: 35px; height: 35px; border-radius: 50%; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
                 .nav-btn:hover { background: #9b51e0; transform: scale(1.1); }
                 
-                /* Layout Vertical e Centralizado idêntico ao "Lendo no Momento" */
-                .book-card { display: flex; flex-direction: column; align-items: center; gap: 8px; flex-grow: 1; padding: 0 10px; text-align: center; }
-                .book-cover { width: 120px; height: 180px; border-radius: 4px; object-fit: cover; box-shadow: 2px 4px 10px rgba(0,0,0,0.5); }
+                .book-card { display: flex; flex-direction: row; align-items: center; gap: 15px; flex-grow: 1; padding: 0 5px; text-align: left; }
+                .book-cover { width: 100px; height: 150px; border-radius: 4px; object-fit: cover; box-shadow: 2px 4px 10px rgba(0,0,0,0.5); flex-shrink:0; }
+                .book-info { display: flex; flex-direction: column; justify-content: center; flex: 1;}
+                .b-stats { font-size: 11px; color: #9b51e0; margin 0 0 8px 0; font-weight: bold; }
                 
                 .b-title { font-size: 16px; font-weight: bold; color: #fff; margin: 5px 0 0 0; line-height: 1.2; }
                 .b-author { font-size: 13px; color: #9b51e0; margin: 0; font-weight: bold; }
@@ -626,10 +642,13 @@ app.get('/hud-livros/galeria', async (req, res) => {
                     <button class="nav-btn" onclick="mudarLivro('lidos', -1)">❮</button>
                     <div class="book-card">
                         <img id="imgLido" class="book-cover" src="">
-                        <p id="tituloLido" class="b-title"></p>
-                        <p id="autorLido" class="b-author"></p>
-                        <p id="metaLido" class="b-meta"></p>
-                        <p id="sinopseLido" class="b-synopsis"></p>
+                        <div class="book-info">
+                            <p id="tituloLido" class="b-title"></p>
+                            <p id="autorLido" class="b-author"></p>
+                            <p id="metaLido" class="b-meta"></p>
+                            <p id="statsLido" class="b-stats"></p>
+                            <p id="sinopseLido" class="b-synopsis"></p>
+                        </div>
                     </div>
                     <button class="nav-btn" onclick="mudarLivro('lidos', 1)">❯</button>
                 </div>
@@ -641,10 +660,12 @@ app.get('/hud-livros/galeria', async (req, res) => {
                     <button class="nav-btn" onclick="mudarLivro('fila', -1)">❮</button>
                     <div class="book-card">
                         <img id="imgFila" class="book-cover" src="">
-                        <p id="tituloFila" class="b-title"></p>
-                        <p id="autorFila" class="b-author"></p>
-                        <p id="metaFila" class="b-meta"></p>
-                        <p id="sinopseFila" class="b-synopsis"></p>
+                        <div class="book-info">
+                            <p id="tituloFila" class="b-title"></p>
+                            <p id="autorFila" class="b-author"></p>
+                            <p id="metaFila" class="b-meta"></p>
+                            <p id="sinopseFila" class="b-synopsis"></p>
+                        </div>
                     </div>
                     <button class="nav-btn" onclick="mudarLivro('fila', 1)">❯</button>
                 </div>
@@ -677,6 +698,15 @@ app.get('/hud-livros/galeria', async (req, res) => {
                     document.getElementById('autor' + sufixo).textContent = livro.autor;
                     document.getElementById('meta' + sufixo).textContent = livro.paginas + ' págs  •  ' + livro.generos;
                     document.getElementById('sinopse' + sufixo).textContent = '"' + livro.sinopse + '"';
+
+                    if (tipo === 'lidos') {
+                        let textoStats = "Finalizado em " + (livro.dataFormatada || "?");
+                        if (livro.diasLidos) {
+                            const palavraDia = livro.diasLidos === 1 ? "dias" : "dias";
+                            textoStats += " • Levou " + livro.diasLidos + " " + palavraDia;
+                        }
+                        document.getElementById('statsLido').textContent = textoStats;
+                    }
                 }
 
                 function mudarLivro(tipo, direcao) {
