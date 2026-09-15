@@ -133,7 +133,7 @@ app.get('/hud-livros/cards', async (req, res) => {
                 
                 <!-- Card 2: Meta do Ano -->
                 <div class="card">
-                    <p class="card-title">Meta ${anoAtual}</p>
+                    <p class="card-title">Meta de livros</p>
                     <p class="card-value">${lidosEsteAno} / ${metaAno}</p>
                     <div class="progress-wrapper">
                         <div class="progress-fill" style="width: ${progressoMeta}%;"></div>
@@ -142,9 +142,10 @@ app.get('/hud-livros/cards', async (req, res) => {
 
                 <!-- Card 3: Volume do Ano -->
                 <div class="card">
-                    <p class="card-title">Volume ${anoAtual}</p>
-                    <p class="card-value">${paginasEsteAno}</p>
-                    <p class="card-sub">páginas lidas</p>
+                    <button class="toggle-btn" onclick="alternarVolume()">Alternar</button>
+                    <p class="card-title" id="labelVolume">Quantidade de páginas</p>
+                    <p class="card-value" id="valorVolume">${paginasEsteAno}</p>
+                    <p class="card-sub" id="subVolume">páginas lidas</p>
                 </div>
 
                 <!-- Card 4: Velocidade com Toggle -->
@@ -167,6 +168,20 @@ app.get('/hud-livros/cards', async (req, res) => {
                     } else {
                         document.getElementById('labelVelocidade').textContent = 'Por Dia Efetivo';
                         document.getElementById('valorVelocidade').textContent = '${velPorDiaLido}';
+                    }
+                }
+                
+                let modoVolumePaginas = true;
+                function alternarVolume() {
+                    modoVolumePaginas = !modoVolumePaginas;
+                    if (modoVolumePaginas) {
+                        document.getElementById('labelVolume').textContent = 'Quantidade de páginas';
+                        document.getElementById('valorVolume').textContent = '${paginasEsteAno}';
+                        document.getElementById('subVolume').textContent = 'páginas lidas';
+                    } else {
+                        document.getElementById('labelVolume').textContent = 'Quantidade de dias';
+                        document.getElementById('valorVolume').textContent = '${diasComLeitura}';
+                        document.getElementById('subVolume').textContent = 'dias de leitura';
                     }
                 }
             </script>
