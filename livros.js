@@ -5,39 +5,7 @@ const cheerio = require('cheerio');
 
 const notion = new Client({ auth: process.env.NOTION_API_KEY });
 
-const dicionarioGeneros = {
-  "philosophy": "Filosofia", "filosofía": "Filosofia", "psychology": "Psicologia",
-  "fiction": "Literatura e Ficção", "self-help": "Autoajuda", "business & economics": "Negócios e Economia",
-  "history": "História", "religion": "Religião", "biography & autobiography": "Biografia",
-  "science": "Ciência", "body, mind & spirit": "Corpo, Mente e Espírito", "computers": "Tecnologia e Computação",
-  "antiques & collectibles": "Antiguidades e Colecionáveis", "performing arts": "Artes Cênicas",
-  "fathers and daughters": "Ficção", "mythology": "Mitologia", "portuguese": "Português"
-};
-
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-const headersFalsos = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-    'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-    'Referer': 'https://www.google.com.br/'
-};
-
-function traduzirGeneros(generos) {
-  if (!generos || generos.length === 0) return [];
-  let generosSeparados = [];
-
-  generos.forEach(g => {
-    if (g.includes(',')) {
-      generosSeparados.push(...g.split(',').map(p => p.trim()));
-    } else {
-      generosSeparados.push(g.trim());
-    }
-  });
-
-  const generosFinais = generosSeparados.map(g => dicionarioGeneros[g.toLowerCase()] || corrigirCaixaAlta(g));
-  return [...new Set(generosFinais)];
-}
 
 function corrigirCaixaAlta(texto) {
   if (!texto) return null;
@@ -54,29 +22,19 @@ function corrigirCaixaAlta(texto) {
 async function rasparAmazon(isbn) {
     try {
         const apiKey = process.env.SCRAPER_API_KEY;
-        if (!apiKey) {
-            console.log("-> [Aviso] SCRAPER_API_KEY não configurada no .env");
-            return null;
-        }
+        if (!apiKey) return null;
 
-        // 1. Busca mascarada pelo ScraperAPI
-        const urlBuscaAmazon = `https://www.amazon.com.br/s?k=${isbn}`;
-        const urlProxyBusca = `http://api.scraperapi.com?api_key=${apiKey}&url=${encodeURIComponent(urlBuscaAmazon)}`;
-        
-        const resBusca = await axios.get(urlProxyBusca);
+        const urlBusca = `https://www.amazon.com.br/s?k=${isbn}`;
+        const resBusca = await axios.get(`http://api.scraperapi.com?api_key=${apiKey}&url=${encodeURIComponent(urlBusca)}`);
         const $busca = cheerio.load(resBusca.data);
         
         const linkRelativo = $busca('a.a-link-normal.s-no-outline').attr('href');
         if (!linkRelativo) return null;
 
-        // 2. Acesso à página do livro mascarado pelo ScraperAPI
-        const urlLivroAmazon = `https://www.amazon.com.br${linkRelativo}`;
-        const urlProxyLivro = `http://api.scraperapi.com?api_key=${apiKey}&url=${encodeURIComponent(urlLivroAmazon)}`;
-        
-        const resLivro = await axios.get(urlProxyLivro);
+        const urlLivro = `https://www.amazon.com.br${linkRelativo}`;
+        const resLivro = await axios.get(`http://api.scraperapi.com?api_key=${apiKey}&url=${encodeURIComponent(urlLivro)}`);
         const $ = cheerio.load(resLivro.data);
 
-        // A extração de dados continua EXATAMENTE igual (a mágica do Cheerio)
         let titulo = $('#productTitle').text().trim().replace(/\s\s+/g, ' '); 
         let autor = $('#bylineInfo .author a').first().text().trim() || $('#bylineInfo').text().trim().split('(')[0].replace('por', '').trim() || null;
         
@@ -107,6 +65,55 @@ async function rasparAmazon(isbn) {
     }
 }
 
+async function rasparSkoob(termoBusca) {
+    try {
+        const apiKey = process.env.SCRAPER_API_KEY;
+        if (!apiKey) return null;
+
+        const urlBusca = `https://www.skoob.com.br/livro/lista/busca:${encodeURIComponent(termoBusca)}/tipo:geral`;
+        const urlProxy = `http://api.scraperapi.com?api_key=${apiKey}&url=${encodeURIComponent(urlBusca)}&render=true`;
+
+        const resBusca = await axios.get(urlProxy);
+        const $busca = cheerio.load(resBusca.data);
+
+        const linkRelativo = $busca('.detalhes-busca a').attr('href') || $busca('a[href^="/livro/"]').first().attr('href');
+        if (!linkRelativo) return null;
+
+        const urlLivro = linkRelativo.startsWith('http') ? linkRelativo : `https://www.skoob.com.br${linkRelativo}`;
+        const urlProxyLivro = `http://api.scraperapi.com?api_key=${apiKey}&url=${encodeURIComponent(urlLivro)}&render=true`;
+
+        const resLivro = await axios.get(urlProxyLivro);
+        const $ = cheerio.load(resLivro.data);
+
+        let titulo = $('*[itemprop="name"]').first().text().trim() || $('h1').first().text().trim() || null;
+        let autor = $('a[href*="/autor/"]').first().text().trim() || null;
+        let capa = $('img[itemprop="image"]').attr('src') || $('#capa_imagem').attr('src') || null;
+        let sinopse = $('*[itemprop="description"]').text().trim() || $('#resenha').text().trim() || null;
+        if (sinopse) sinopse = sinopse.replace(/\s\s+/g, ' '); 
+        
+        let paginas = 0;
+        const matchPaginas = $('body').text().match(/Páginas:\s*(\d+)/i) || $('body').text().match(/(\d+)\s*páginas/i);
+        if (matchPaginas) paginas = parseInt(matchPaginas[1]);
+
+        let generos = [];
+        $('a[href*="/livros/tag/"]').each((i, el) => {
+            const gen = $(el).text().trim();
+            if (gen && gen.length > 2) generos.push(gen);
+        });
+        
+        if (generos.length === 0) {
+            $('.bar-title a').each((i, el) => {
+                const gen = $(el).text().trim();
+                if (gen && gen !== "Livros" && gen !== "Início") generos.push(gen);
+            });
+        }
+
+        return { titulo, autores: autor ? [autor] : [], genero: [...new Set(generos)], paginas, sinopse, capa };
+    } catch (erro) { 
+        return null; 
+    }
+}
+
 async function orquestrarBusca(tituloPesquisa, autorPesquisa) {
     const numeros = tituloPesquisa.replace(/\D/g, '');
     const ehIsbn = (numeros.length === 10 || numeros.length === 13);
@@ -115,24 +122,34 @@ async function orquestrarBusca(tituloPesquisa, autorPesquisa) {
 
     if (ehIsbn) {
         dadosFinais = await rasparAmazon(numeros);
-        if (!dadosFinais) {
-            dadosFinais = await buscarGoogleBooks(`isbn:${numeros}`);
+        const dadosSkoob = await rasparSkoob(numeros) || await rasparSkoob(tituloPesquisa);
+
+        if (dadosFinais && dadosSkoob) {
+            if (dadosSkoob.genero.length > 0) {
+                dadosFinais.genero = [...new Set([...dadosFinais.genero, ...dadosSkoob.genero])];
+            }
+            if (!dadosFinais.sinopse && dadosSkoob.sinopse) dadosFinais.sinopse = dadosSkoob.sinopse;
+            if (!dadosFinais.capa && dadosSkoob.capa) dadosFinais.capa = dadosSkoob.capa;
+            if (dadosFinais.paginas === 0 && dadosSkoob.paginas > 0) dadosFinais.paginas = dadosSkoob.paginas;
+        } else if (!dadosFinais) {
+            dadosFinais = dadosSkoob;
         }
     } 
     
     if (!dadosFinais) {
-        let termoTexto = tituloPesquisa;
-        if (autorPesquisa && autorPesquisa !== "Autor desconhecido") termoTexto += ` ${autorPesquisa}`;
-        dadosFinais = await buscarGoogleBooks(termoTexto) || {};
+        dadosFinais = await rasparSkoob(tituloPesquisa);
+        if (!dadosFinais && autorPesquisa && autorPesquisa !== "Autor desconhecido") {
+            dadosFinais = await rasparSkoob(`${tituloPesquisa} ${autorPesquisa}`);
+        }
     }
 
     return {
-        titulo: corrigirCaixaAlta(dadosFinais.titulo || (ehIsbn ? "Título desconhecido" : tituloPesquisa)),
-        autores: dadosFinais.autores && dadosFinais.autores.length > 0 ? dadosFinais.autores.map(a => corrigirCaixaAlta(a)) : ["Autor desconhecido"],
-        genero: traduzirGeneros(dadosFinais.genero || []),
-        paginas: dadosFinais.paginas || 0,
-        sinopse: dadosFinais.sinopse || "Sem sinopse.",
-        capa: dadosFinais.capa || null
+        titulo: corrigirCaixaAlta(dadosFinais?.titulo || (ehIsbn ? "Título desconhecido" : tituloPesquisa)),
+        autores: dadosFinais?.autores && dadosFinais.autores.length > 0 ? dadosFinais.autores.map(a => corrigirCaixaAlta(a)) : ["Autor desconhecido"],
+        genero: dadosFinais?.genero ? [...new Set(dadosFinais.genero.map(g => corrigirCaixaAlta(g)))] : [],
+        paginas: dadosFinais?.paginas || 0,
+        sinopse: dadosFinais?.sinopse || "Sem sinopse.",
+        capa: dadosFinais?.capa || null
     };
 }
 
