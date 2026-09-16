@@ -143,10 +143,15 @@ async function orquestrarBusca(tituloPesquisa, autorPesquisa) {
         }
     }
 
+    let generosLimpos = [];
+    if (dadosFinais?.genero) {
+        generosLimpos = dadosFinais.genero.map(g => g.replace(/,/g, '').trim());
+    }
+
     return {
         titulo: corrigirCaixaAlta(dadosFinais?.titulo || (ehIsbn ? "Título desconhecido" : tituloPesquisa)),
         autores: dadosFinais?.autores && dadosFinais.autores.length > 0 ? dadosFinais.autores.map(a => corrigirCaixaAlta(a)) : ["Autor desconhecido"],
-        genero: dadosFinais?.genero ? [...new Set(dadosFinais.genero.map(g => corrigirCaixaAlta(g)))] : [],
+        genero: [...new Set(generosLimpos.map(g => corrigirCaixaAlta(g)))],
         paginas: dadosFinais?.paginas || 0,
         sinopse: dadosFinais?.sinopse || "Sem sinopse.",
         capa: dadosFinais?.capa || null
