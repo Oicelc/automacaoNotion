@@ -53,17 +53,30 @@ function corrigirCaixaAlta(texto) {
 
 async function rasparAmazon(isbn) {
     try {
-        const urlBusca = `https://www.amazon.com.br/s?k=${isbn}`;
-        const resBusca = await axios.get(urlBusca, { headers: headersFalsos });
+        const apiKey = process.env.SCRAPER_API_KEY;
+        if (!apiKey) {
+            console.log("-> [Aviso] SCRAPER_API_KEY não configurada no .env");
+            return null;
+        }
+
+        // 1. Busca mascarada pelo ScraperAPI
+        const urlBuscaAmazon = `https://www.amazon.com.br/s?k=${isbn}`;
+        const urlProxyBusca = `http://api.scraperapi.com?api_key=${apiKey}&url=${encodeURIComponent(urlBuscaAmazon)}`;
+        
+        const resBusca = await axios.get(urlProxyBusca);
         const $busca = cheerio.load(resBusca.data);
         
         const linkRelativo = $busca('a.a-link-normal.s-no-outline').attr('href');
         if (!linkRelativo) return null;
 
-        const urlLivro = `https://www.amazon.com.br${linkRelativo}`;
-        const resLivro = await axios.get(urlLivro, { headers: headersFalsos });
+        // 2. Acesso à página do livro mascarado pelo ScraperAPI
+        const urlLivroAmazon = `https://www.amazon.com.br${linkRelativo}`;
+        const urlProxyLivro = `http://api.scraperapi.com?api_key=${apiKey}&url=${encodeURIComponent(urlLivroAmazon)}`;
+        
+        const resLivro = await axios.get(urlProxyLivro);
         const $ = cheerio.load(resLivro.data);
 
+        // A extração de dados continua EXATAMENTE igual (a mágica do Cheerio)
         let titulo = $('#productTitle').text().trim().replace(/\s\s+/g, ' '); 
         let autor = $('#bylineInfo .author a').first().text().trim() || $('#bylineInfo').text().trim().split('(')[0].replace('por', '').trim() || null;
         
@@ -89,32 +102,9 @@ async function rasparAmazon(isbn) {
         });
 
         return { titulo, autores: autor ? [autor] : [], genero: [...new Set(generos)], paginas, sinopse, capa };
-    } catch (erro) { return null; }
-}
-
-async function buscarGoogleBooks(termoBusca) {
-    const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(termoBusca)}&key=${process.env.GOOGLE_BOOKS_API_KEY}&langRestrict=pt&printType=books`;
-    try {
-        const resposta = await axios.get(url);
-        const dados = resposta.data; 
-        if (!dados.items || dados.items.length === 0) return null;
-
-        let livroEscolhido = dados.items[0].volumeInfo;
-        for (const item of dados.items.slice(0, 5)) {
-            const candidato = item.volumeInfo;
-            if (candidato.imageLinks?.thumbnail && candidato.categories && candidato.pageCount) {
-                livroEscolhido = candidato; break; 
-            }
-        }
-        return {
-            titulo: livroEscolhido.title || null, 
-            autores: livroEscolhido.authors || [],
-            genero: livroEscolhido.categories || [], 
-            paginas: livroEscolhido.pageCount || 0,
-            sinopse: livroEscolhido.description || null,
-            capa: livroEscolhido.imageLinks?.thumbnail ? livroEscolhido.imageLinks.thumbnail.replace("http://", "https://") : null 
-        };
-    } catch (erro) { return null; }
+    } catch (erro) { 
+        return null; 
+    }
 }
 
 async function orquestrarBusca(tituloPesquisa, autorPesquisa) {

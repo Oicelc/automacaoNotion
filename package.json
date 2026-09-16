@@ -4,7 +4,7 @@
   "description": "",
   "main": "filmes.js",
   "scripts": {
-    "start": "concurrently \"node servidor.js\" \"node livros.js\" \"node filmes.js\" \"node hud.js\""
+    "start": "concurrently \"node servidor.js\" \"node livros.js\" \"node filmes.js\""
   },
   "keywords": [],
   "author": "",
