@@ -6,6 +6,41 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
+app.get('/', (req, res) => {
+    const html = `
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <title>Notion HUD - Central</title>
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+            body { background-color: #191919; color: #E0E0E0; font-family: 'Inter', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+            .container { background: #252525; padding: 30px; border-radius: 8px; border-top: 4px solid #9b51e0; box-shadow: 0 4px 10px rgba(0,0,0,0.5); text-align: center; max-width: 400px; width: 100%; }
+            h1 { color: #fff; font-size: 20px; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; }
+            p.status { color: #4ade80; font-size: 12px; font-weight: bold; margin-bottom: 25px; }
+            .links { display: flex; flex-direction: column; gap: 10px; }
+            a { display: block; background: #333; color: #ccc; text-decoration: none; padding: 12px; border-radius: 4px; transition: all 0.2s; font-size: 14px; font-weight: bold; }
+            a:hover { background: #9b51e0; color: #fff; transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.3); }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>HUD Backend</h1>
+            <p class="status">Servidor Online e Monitorado</p>
+            <div class="links">
+                <a href="/hud-livros/cards" target="_blank">Cards de Métricas</a>
+                <a href="/hud-livros/graficos" target="_blank">Gráficos de Frequência</a>
+                <a href="/hud-livros/lendo" target="_blank">Lendo no Momento</a>
+                <a href="/hud-livros/galeria" target="_blank">Últimas Leituras e Fila</a>
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
+    res.status(200).send(html);
+});
+
 const notionHeaders = {
     "Authorization": `Bearer ${process.env.NOTION_API_KEY}`,
     "Notion-Version": "2022-06-28",
