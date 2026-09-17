@@ -5,6 +5,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
+app.use(express.static('public'));
 
 app.get('/', (req, res) => {
     const html = `
@@ -1001,6 +1002,66 @@ app.get('/hud-livros/lendo', async (req, res) => {
         `;
         res.send(html);
     } catch (erro) { res.send(`<body style="color:white; background:#191919;">Erro: ${erro.message}</body>`); }
+});
+
+// API REST: FILMES (Para a HUD PS5)
+app.get('/api/filmes', async (req, res) => {
+    try {
+        const notionHeaders = { 
+            "Authorization": `Bearer ${process.env.NOTION_API_KEY}`, 
+            "Notion-Version": "2022-06-28", 
+            "Content-Type": "application/json" 
+        };
+
+        // 1. Busca os últimos 15 filmes do Notion (mantém a requisição rápida)
+        const resposta = await axios.post(
+            `https://api.notion.com/v1/databases/${process.env.NOTION_DATABASE_FILMES}/query`, 
+            { page_size: 15 }, 
+            { headers: notionHeaders }
+        );
+
+        const filmes = [];
+
+        // 2. Extrai e formata os dados de cada filme
+        for (const page of resposta.data.results) {
+            const props = page.properties;
+            const titulo = props["Nome"]?.title[0]?.plain_text || "Sem Título";
+            const diretor = props["Diretor"]?.select?.name || "Desconhecido";
+            const ano = props["Ano"]?.number || "";
+            const duracao = props["Tempo de duração"]?.rich_text[0]?.plain_text || "";
+            const generos = props["Gênero"]?.multi_select.map(g => g.name).join(" • ") || "";
+
+            // O roteamento das imagens que consertamos na migração
+            let poster = "https://via.placeholder.com/300x450/252525/9b51e0?text=Poster";
+            if (page.icon?.external?.url) poster = page.icon.external.url;
+            else if (page.icon?.file?.url) poster = page.icon.file.url;
+
+            let backdrop = poster;
+            if (page.cover?.external?.url) backdrop = page.cover.external.url;
+            else if (page.cover?.file?.url) backdrop = page.cover.file.url;
+
+            // 3. Busca a sinopse dentro dos blocos da página
+            let sinopse = "Sinopse não disponível.";
+            try {
+                const blocos = await axios.get(`https://api.notion.com/v1/blocks/${page.id}/children`, { headers: notionHeaders });
+                const paragrafo = blocos.data.results.find(b => b.type === 'paragraph' && b.paragraph?.rich_text?.length > 0);
+                if (paragrafo) {
+                    sinopse = paragrafo.paragraph.rich_text[0].plain_text;
+                }
+            } catch (e) {
+                console.error(`Aviso: Não foi possível carregar a sinopse de ${titulo}`);
+            }
+
+            filmes.push({ titulo, diretor, ano, duracao, generos, poster, backdrop, sinopse });
+        }
+
+        // 4. Devolve o pacote de dados limpo para o Front-end
+        res.status(200).json(filmes);
+
+    } catch (erro) {
+        console.error("Erro na API de filmes:", erro.message);
+        res.status(500).json({ error: "Falha ao buscar os filmes no Notion." });
+    }
 });
 
 app.listen(PORT, () => { console.log(`Servidor rodando na porta ${PORT}`); });

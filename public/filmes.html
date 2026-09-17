@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HUD Filmes - PS5 Style</title>
+    <!-- Aqui conectamos o arquivo de estilos que criaremos em seguida -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Camada 1: O Palco (Fundo desfocado e Gradiente Escuro) -->
+    <div id="bg-layer"></div>
+    <div class="overlay"></div>
+    
+    <!-- Container que agrupa os textos e o carrossel na frente de tudo -->
+    <div id="content">
+        
+        <!-- Camada 2: Painel de Informações (Esquerda) -->
+        <div id="info-layer">
+            <h1 class="title" id="m-title">Carregando...</h1>
+            <div class="meta-tags" id="m-meta">
+                <!-- Pílulas de ano, gênero e duração aparecerão aqui -->
+            </div>
+            <p class="synopsis" id="m-synopsis">Sincronizando com o Notion...</p>
+        </div>
+        
+        <!-- Camada 3: Carrossel de Capas (Rodapé) -->
+        <div id="carousel-container">
+            <div class="carousel-label">Filmes Recentes</div>
+            <div class="carousel" id="carousel">
+                <!-- Os cartazes verticais serão injetados aqui -->
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Aqui conectamos o arquivo de inteligência que fará a mágica funcionar -->
+    <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,148 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+
+/* Reset e Configurações Globais */
+body {
+    margin: 0;
+    padding: 0;
+    background-color: #000;
+    color: #fff;
+    font-family: 'Inter', sans-serif;
+    overflow: hidden; /* Trava a rolagem da página inteira */
+    height: 100vh;
+}
+
+/* Camada 1: O Palco (Fundo Dinâmico com Blur) */
+#bg-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-size: cover;
+    background-position: center top;
+    transition: background-image 0.4s ease-in-out;
+    z-index: 1;
+    filter: blur(8px); /* Aplica o desfoque cinematográfico */
+}
+
+/* O Gradiente Escuro (Garante que a arte não engula o texto) */
+.overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: linear-gradient(90deg, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.5) 45%, transparent 100%), 
+                linear-gradient(0deg, rgba(0,0,0,0.95) 0%, transparent 35%);
+    z-index: 2;
+}
+
+/* Container Principal */
+#content {
+    position: relative;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 100vh;
+    padding: 50px 70px;
+    box-sizing: border-box;
+}
+
+/* Camada 2: Painel de Informações */
+#info-layer {
+    max-width: 650px;
+    margin-top: 5vh;
+}
+
+.title {
+    font-size: 64px;
+    font-weight: 900;
+    margin: 0 0 15px 0;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    text-shadow: 2px 2px 10px rgba(0,0,0,0.8);
+    line-height: 1.1;
+}
+
+/* Tags de Metadados (Efeito Glassmorphism) */
+.meta-tags {
+    display: flex;
+    gap: 12px;
+    font-size: 13px;
+    font-weight: bold;
+    color: #eee;
+    margin-bottom: 25px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.meta-tags span {
+    background: rgba(255, 255, 255, 0.15);
+    padding: 6px 12px;
+    border-radius: 4px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Sinopse limitada a 4 linhas */
+.synopsis {
+    font-size: 16px;
+    line-height: 1.6;
+    color: #ddd;
+    text-shadow: 1px 1px 4px rgba(0,0,0,1);
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Camada 3: Carrossel de Capas */
+#carousel-container {
+    width: 100%;
+    padding-bottom: 10px;
+}
+
+.carousel-label {
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 10px;
+    color: #fff;
+    text-shadow: 1px 1px 4px rgba(0,0,0,0.8);
+}
+
+.carousel {
+    display: flex;
+    gap: 18px;
+    overflow-x: auto;
+    padding: 30px 10px 10px 10px; /* Espaço extra no topo para a animação não cortar */
+    scroll-behavior: smooth;
+}
+
+/* Esconde a barra de rolagem nativa, mantendo a função de scroll */
+.carousel::-webkit-scrollbar {
+    display: none;
+}
+
+/* Design dos Cartazes */
+.movie-card {
+    width: 140px;
+    height: 210px;
+    border-radius: 6px;
+    cursor: pointer;
+    object-fit: cover;
+    opacity: 0.5; /* Cartazes inativos ficam meio apagados */
+    border: 2px solid transparent;
+    flex-shrink: 0;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* O Efeito Magnético do PS5 no Hover */
+.movie-card:hover, .movie-card.active {
+    transform: scale(1.15) translateY(-15px);
+    opacity: 1;
+    border: 2px solid #fff;
+    box-shadow: 0 15px 25px rgba(0,0,0,0.9);
+    z-index: 10;
+}
