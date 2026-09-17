@@ -1004,26 +1004,38 @@ app.get('/hud-livros/lendo', async (req, res) => {
     } catch (erro) { res.send(`<body style="color:white; background:#191919;">Erro: ${erro.message}</body>`); }
 });
 
+// ==========================================
 // API REST: FILMES (Para a HUD PS5)
+// ==========================================
 app.get('/api/filmes', async (req, res) => {
     try {
-        const notionHeaders = { 
-            "Authorization": `Bearer ${process.env.NOTION_API_KEY}`, 
-            "Notion-Version": "2022-06-28", 
-            "Content-Type": "application/json" 
-        };
+        const { categoria } = req.query; 
+        const notionHeaders = { "Authorization": `Bearer ${process.env.NOTION_API_KEY}`, "Notion-Version": "2022-06-28", "Content-Type": "application/json" };
+        
+        let body = { page_size: 15 };
 
-        // 1. Busca os últimos 15 filmes do Notion (mantém a requisição rápida)
-        const resposta = await axios.post(
-            `https://api.notion.com/v1/databases/${process.env.NOTION_DATABASE_FILMES}/query`, 
-            { page_size: 15 }, 
-            { headers: notionHeaders }
-        );
+        // Lógica de Roteamento (Ajustada para tipo Select)
+        if (categoria === 'assistidos') {
+            body.filter = { property: "Status", status: { equals: "Assistido" } };
+            body.sorts = [{ timestamp: "last_edited_time", direction: "descending" }]; 
+        } else if (categoria === 'adicionados') {
+            body.sorts = [{ timestamp: "created_time", direction: "descending" }];
+        } else {
+            // Modo Home / Aleatório
+            body.page_size = 100;
+            body.filter = { property: "Status", status: { does_not_equal: "Assistido" } };
+        }
+
+        const resposta = await axios.post(`https://api.notion.com/v1/databases/${process.env.NOTION_DATABASE_FILMES}/query`, body, { headers: notionHeaders });
+        let resultados = resposta.data.results;
+
+        // O Truque do Dado: Embaralha os filmes não assistidos e corta para 10
+        if (!categoria || categoria === 'aleatorio') {
+            resultados = resultados.sort(() => 0.5 - Math.random()).slice(0, 10);
+        }
 
         const filmes = [];
-
-        // 2. Extrai e formata os dados de cada filme
-        for (const page of resposta.data.results) {
+        for (const page of resultados) {
             const props = page.properties;
             const titulo = props["Nome"]?.title[0]?.plain_text || "Sem Título";
             const diretor = props["Diretor"]?.select?.name || "Desconhecido";
@@ -1031,7 +1043,6 @@ app.get('/api/filmes', async (req, res) => {
             const duracao = props["Tempo de duração"]?.rich_text[0]?.plain_text || "";
             const generos = props["Gênero"]?.multi_select.map(g => g.name).join(" • ") || "";
 
-            // O roteamento das imagens que consertamos na migração
             let poster = "https://via.placeholder.com/300x450/252525/9b51e0?text=Poster";
             if (page.icon?.external?.url) poster = page.icon.external.url;
             else if (page.icon?.file?.url) poster = page.icon.file.url;
@@ -1040,26 +1051,20 @@ app.get('/api/filmes', async (req, res) => {
             if (page.cover?.external?.url) backdrop = page.cover.external.url;
             else if (page.cover?.file?.url) backdrop = page.cover.file.url;
 
-            // 3. Busca a sinopse dentro dos blocos da página
-            let sinopse = "Sinopse não disponível.";
+            let sinopse = "Sincronizando dados...";
             try {
                 const blocos = await axios.get(`https://api.notion.com/v1/blocks/${page.id}/children`, { headers: notionHeaders });
                 const paragrafo = blocos.data.results.find(b => b.type === 'paragraph' && b.paragraph?.rich_text?.length > 0);
-                if (paragrafo) {
-                    sinopse = paragrafo.paragraph.rich_text[0].plain_text;
-                }
-            } catch (e) {
-                console.error(`Aviso: Não foi possível carregar a sinopse de ${titulo}`);
-            }
+                if (paragrafo) sinopse = paragrafo.paragraph.rich_text[0].plain_text;
+            } catch (e) {}
 
             filmes.push({ titulo, diretor, ano, duracao, generos, poster, backdrop, sinopse });
         }
 
-        // 4. Devolve o pacote de dados limpo para o Front-end
         res.status(200).json(filmes);
-
     } catch (erro) {
-        console.error("Erro na API de filmes:", erro.message);
+        // Agora o erro exato aparecerá no seu terminal se algo mais der errado
+        console.error("❌ Erro na API de filmes:", erro.response?.data || erro.message);
         res.status(500).json({ error: "Falha ao buscar os filmes no Notion." });
     }
 });

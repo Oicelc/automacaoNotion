@@ -11,6 +11,27 @@
     <!-- Camada 1: O Palco (Fundo desfocado e Gradiente Escuro) -->
     <div id="bg-layer"></div>
     <div class="overlay"></div>
+
+    <!-- Menu de Navegação Superior (Estilo PS5) -->
+    <nav class="top-menu">
+        <a href="#" class="menu-icon" title="Pesquisar">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
+            </svg>
+        </a>
+        <a href="#" class="menu-item active" data-categoria="aleatorio">Home</a>
+        <a href="#" class="menu-item" data-categoria="assistidos">Assistidos</a>
+        <a href="#" class="menu-item" data-categoria="adicionados">Adicionados</a>
+        <a href="#" class="menu-item" data-categoria="filtro">Filtro</a>
+        
+        <!-- Botão do Dado (Aleatório) -->
+        <a href="#" class="menu-icon" title="Rolar os Dados" id="btn-dados">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M13 1a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2zM3 0a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3V3a3 3 0 0 0-3-3z"/>
+                <path d="M5.5 4a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m8 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0 8a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m-8 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m4-4a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"/>
+            </svg>
+        </a>
+    </nav>
     
     <!-- Container que agrupa os textos e o carrossel na frente de tudo -->
     <div id="content">
@@ -26,7 +47,7 @@
         
         <!-- Camada 3: Carrossel de Capas (Rodapé) -->
         <div id="carousel-container">
-            <div class="carousel-label">Filmes Recentes</div>
+            <div class="carousel-label" id="carousel-label">Escolha Aleatória</div>
             <div class="carousel" id="carousel">
                 <!-- Os cartazes verticais serão injetados aqui -->
             </div>
