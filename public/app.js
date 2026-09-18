@@ -11,6 +11,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let filmes = [];
 
+    // Ação: Expande/Recolhe a sinopse ao clicar nela
+    synopsisEl.addEventListener('click', () => {
+        synopsisEl.classList.toggle('expanded');
+    });
+
     // Função central que conversa com a nova API (Modo Detetive)
     async function carregarFilmes(categoria, tituloSessao) {
         try {
@@ -52,6 +57,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 synopsisEl.textContent = "A base não retornou resultados para este filtro.";
                 return;
             }
+            
+            // ===== REGRA DA BARRA DE ROLAGEM =====
+            if (categoria === 'aleatorio') {
+                carouselEl.style.overflowY = 'hidden'; // Trava e esconde na Home
+            } else {
+                carouselEl.style.overflowY = 'auto';   // Libera nas listas longas
+            }
+            // =====================================
 
             renderizarCarrossel();
             focarFilme(0);
@@ -102,6 +115,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Troca de informações visuais do PS5
     function focarFilme(index) {
+        synopsisEl.classList.remove('expanded');
         const filme = filmes[index];
         bgLayer.style.backgroundImage = `url('${filme.backdrop}')`;
         titleEl.textContent = filme.titulo;

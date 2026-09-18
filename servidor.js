@@ -1012,7 +1012,7 @@ app.get('/api/filmes', async (req, res) => {
         const { categoria } = req.query; 
         const notionHeaders = { "Authorization": `Bearer ${process.env.NOTION_API_KEY}`, "Notion-Version": "2022-06-28", "Content-Type": "application/json" };
         
-        let body = { page_size: 15 };
+        let body = { page_size: 100 };
 
         // Lógica de Roteamento (Ajustada para tipo Select)
         if (categoria === 'assistidos') {
